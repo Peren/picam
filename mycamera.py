@@ -11,7 +11,10 @@ import os
 class MyCamera:
 	camera = PiCamera()
 
-	def __init__(self, mode, exposure, iso=0):
+	def __init__(self, mode='auto', exposure=0, iso=0):
+		self.configure(mode, exposure, iso)
+
+	def configure(self, mode, exposure, iso):
 		shutter_speed = exposure * 1000
 		framerate = 30
 		if exposure > 0:
@@ -29,6 +32,11 @@ class MyCamera:
 		# Give the camera a good long time to set gains and
 		# measure AWB (you may wish to use fixed AWB instead)
 
+#		self.camera.exposure_mode = 'off'
+		self.camera.exposure_mode = mode
+#		self.camera.annotate_text = "Gain: {}, Exposure: {}".format(old_gain, old_speed)
+
+	def calibrate(self):
 		old_gain = None
 		old_speed = None
 		for i in range(30):
@@ -47,10 +55,6 @@ class MyCamera:
 				old_gain = new_a_gain
 				old_speed = new_speed
 
-#		self.camera.exposure_mode = 'off'
-		self.camera.exposure_mode = mode
-#		self.camera.annotate_text = "Gain: {}, Exposure: {}".format(old_gain, old_speed)
-
 	def capture(self, file):
 		# Finally, capture an image with a 6s exposure. Due
 		# to mode switching on the still port, this will take
@@ -63,6 +67,12 @@ class MyCamera:
 		print('.', end='', flush=True)
 		self.camera.capture(file)
 		print('.', end='', flush=True)
+
+	def capture_image(self):
+		stream = io.BytesIO()
+		self.camera.capture(stream, format='png')
+		stream.seek(0)
+		return Image.open(stream)
 
 def parse_args():
 	parser = argparse.ArgumentParser(description="MyCamera console")
