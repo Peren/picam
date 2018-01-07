@@ -8,11 +8,24 @@ from fractions import Fraction
 import datetime
 import os
 
+class Config:
+	mode = 'auto'
+	exposure = 0
+	iso = 0
+
+	def __init__(self, mode = 'auto', exposure = 0, iso = 0):
+		self.mode = mode
+		self.exposure = exposure
+		self.iso = iso
+
 class MyCamera:
 	camera = PiCamera()
 
 	def __init__(self, mode='auto', exposure=0, iso=0):
 		self.configure(mode, exposure, iso)
+
+	def config(self, config):
+		self.configure(config.mode, config.exposure, config.iso)
 
 	def configure(self, mode, exposure, iso):
 		shutter_speed = exposure * 1000
