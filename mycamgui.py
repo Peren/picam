@@ -3,15 +3,61 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 from mycamera import MyCamera
 import datetime
-
-def get_timestamp():
-	now = datetime.datetime.now()
-	timestamp = now.strftime("%Y%m%d_%H%M%S")
-	return timestamp
+import threading
+import time
 
 def do_grid(widget, grid):
 	widget.grid(**grid)
 	return widget
+
+class LiveUpdater:
+	def __init__(self, mycam, canvas):
+		self.mycam = mycam
+		self.canvas = canvas
+		self.thread = None
+		self.running = False
+
+	def start(self):
+		print("Live on")
+		if (self.thread is None):
+			self.thread = threading.Thread(target=self.run)
+			self.thread.start()
+		print("Live ON")
+
+	def stop(self):
+		print("Live off")
+		if (self.thread is not None):
+			self.running = False
+#			self.thread.join()
+			self.thread = None
+		print("Live OFF")
+
+	def run(self):
+		self.running = True
+		while(self.running):
+			self.update_canvas()
+			time.sleep(0.1)
+
+	def get_timestamp(self):
+		now = datetime.datetime.now()
+		timestamp = now.strftime("%Y%m%d_%H%M%S")
+		return timestamp
+
+	def update_canvas(self):
+		time1 = time.time()
+		self.pilimage = self.mycam.capture_image()
+		print("Capture: {}s".format(time.time() - time1))
+		time2 = time.time()
+		size = (960, 540)
+		self.pilimage = self.pilimage.resize(size, Image.ANTIALIAS)
+		print("Resize: {}s".format(time.time() - time2))
+
+		time3 = time.time()
+		self.canvas.set_image(self.pilimage)
+
+		self.timestamp = self.get_timestamp()
+		self.canvas.set_time(self.timestamp)
+		print("Set image: {}s".format(time.time() - time3))
 
 class MyCamMenu(tk.Frame):
 	def __init__(self, master, app):
@@ -20,7 +66,7 @@ class MyCamMenu(tk.Frame):
 		self.widget1 = self.build_label("Controls", grid={"columnspan":1})
 		self.widget2 = self.build_button("Calibrate", app.cmd_calibrate, grid={"columnspan":2})
 		self.widget3 = self.build_labelframe("Capture", grid={"sticky":"EW"})
-		self.widget3.x = self.build_checkbox("Live", root = self.widget3)
+		self.widget3.x = self.build_checkbox("Live", root = self.widget3, command = app.cmd_live)
 		self.widget3.y = self.build_button("Now", app.cmd_capture, root = self.widget3, grid={"column":1, "row":0, "sticky":"E"})
 		self.widget4 = self.build_button("Save...", app.cmd_save, grid={"columnspan":1})
 		self.widget5 = self.build_label("Settings", grid={"columnspan":1})
@@ -59,10 +105,12 @@ class MyCamMenu(tk.Frame):
 		entry = ttk.Entry(root)
 		return do_grid(entry, grid)
 
-	def build_checkbox(self, text, root = None, var = None, grid = {}):
+	def build_checkbox(self, text, root = None, command = None, var = None, grid = {}):
 		if (root is None): root = self
 		if (var is None): var = tk.IntVar()
 		checkbox = tk.Checkbutton(root, text=text, variable=var)
+		if (command is not None):
+			checkbox.config(command=command)
 		checkbox.var = var
 		return do_grid(checkbox, grid)
 
@@ -87,32 +135,27 @@ class MainApplication(tk.Frame):
 
 		self.menu = MyCamMenu(self, self)
 		self.menu.grid()
-		self.w = MyCamCanvas(self, width=960, height=540)
-		self.w.grid(column=10, row=0)
+		self.canvas = MyCamCanvas(self, width=960, height=540)
+		self.canvas.grid(column=10, row=0)
 
 		self.pilimage = None
-
-	def cmd_test(self):
-		print("Test")
-
-	def cmd_line(self):
-		self.w.create_line(960, 0, 0, 540, fill="red")
+		self.updater = LiveUpdater(self.mycam, self.canvas)
 
 	def cmd_calibrate(self):
 		self.mycam.calibrate()
 
 	def cmd_capture(self):
-		self.pilimage = self.mycam.capture_image()
-		size = (960, 540)
-		self.pilimage = self.pilimage.resize(size, Image.ANTIALIAS)
-
-		self.w.set_image(self.pilimage)
-
-		self.timestamp = get_timestamp()
-		self.w.set_time(self.timestamp)
+		self.updater.update_canvas()
 
 	def cmd_set_mode(self):
 		print("Set mode")
+
+	def cmd_live(self):
+		live = self.menu.widget3.x.var.get()
+		if (live > 0):
+			self.updater.start()
+		else:
+			self.updater.stop()
 
 	def cmd_save(self):
 		if self.pilimage is not None:
@@ -126,9 +169,6 @@ class MainApplication(tk.Frame):
 	def cmd_exit(self):
 		print("Exit")
 		self.master.destroy()
-
-def capture():
-	print("Capture")
 
 def main():
 	mycam = MyCamera('auto', 0)
