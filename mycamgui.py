@@ -8,6 +8,15 @@ import time
 import queue
 import enum
 
+def timing(f):
+	def wrap(*args):
+		t1 = time.time()
+		ret = f(*args)
+		t2 = time.time()
+		print("{:<32} : {:>6.0f}".format(f.__qualname__, (t2 - t1)*1000))
+		return ret
+	return wrap
+
 class LiveUpdate(enum.Enum):
 	PAUSE = 0
 	RUN   = 1
@@ -74,6 +83,7 @@ class LiveUpdater:
 
 			return LiveUpdater.WorkItem()
 
+		@timing
 		def work(self, item):
 			item.image = self.mycam.capture_image()
 			return item
@@ -82,6 +92,7 @@ class LiveUpdater:
 		def __init__(self, in_q, out_q):
 			LiveUpdater.Worker.__init__(self, in_q, out_q)
 
+		@timing
 		def work(self, item):
 			size = (960, 540)
 			item.image = item.image.resize(size, Image.ANTIALIAS)
@@ -97,6 +108,7 @@ class LiveUpdater:
 			timestamp = now.strftime("%Y%m%d_%H%M%S")
 			return timestamp
 
+		@timing
 		def work(self, item):
 			self.mycanvas.set_image(item.image)
 
@@ -115,6 +127,7 @@ class LiveUpdater:
 			print("Set autosave: {}".format(state))
 			self.state = state
 
+		@timing
 		def work(self, item):
 			if (self.state is True):
 				print("Saving...")
