@@ -15,6 +15,9 @@ class LiveUpdate(enum.Enum):
 	EXIT  = 3
 
 class LiveUpdater:
+	class WorkItem:
+		pass
+
 	class Worker(threading.Thread):
 		def __init__(self, in_q = None, out_q = None):
 			threading.Thread.__init__(self)
@@ -48,14 +51,14 @@ class LiveUpdater:
 
 	class CaptureWorker(Worker):
 		def __init__(self, mycam, out_q):
-			LiveUpdater.Worker.__init__(self, out_q = out_q)
+			LiveUpdater.Worker.__init__(self, None, out_q)
 			self.mycam = mycam
 			self.num = 0
 			self.cv = threading.Condition()
 			self.state = LiveUpdate.PAUSE
 
 		def set_state(self, state):
-			print("Set state: {}".format(state))
+			print("Set capture: {}".format(state))
 			with self.cv:
 				self.state = state
 				self.cv.notify()
@@ -69,9 +72,10 @@ class LiveUpdater:
 				if (self.state is LiveUpdate.ONCE):
 					self.set_state(LiveUpdate.PAUSE)
 
-			return self.mycam.capture_image()
+			return LiveUpdater.WorkItem()
 
 		def work(self, item):
+			item.image = self.mycam.capture_image()
 			return item
 
 	class ScaleWorker(Worker):
@@ -80,12 +84,12 @@ class LiveUpdater:
 
 		def work(self, item):
 			size = (960, 540)
-			image = item.resize(size, Image.ANTIALIAS)
-			return image
+			item.image = item.image.resize(size, Image.ANTIALIAS)
+			return item
 
 	class DisplayWorker(Worker):
-		def __init__(self, mycanvas, in_q):
-			LiveUpdater.Worker.__init__(self, in_q)
+		def __init__(self, mycanvas, in_q, out_q = None):
+			LiveUpdater.Worker.__init__(self, in_q, out_q)
 			self.mycanvas = mycanvas
 
 		def get_timestamp(self):
@@ -94,10 +98,10 @@ class LiveUpdater:
 			return timestamp
 
 		def work(self, item):
-			self.mycanvas.set_image(item)
+			self.mycanvas.set_image(item.image)
 
-			self.timestamp = self.get_timestamp()
-			self.mycanvas.set_time(self.timestamp)
+			item.timestamp = self.get_timestamp()
+			self.mycanvas.set_time(item.timestamp)
 
 			return item
 
@@ -142,11 +146,9 @@ class MyCamMenu(tk.Frame):
 		self.widget3 = self.build_labelframe("Capture", grid={"sticky":"EW"})
 		self.widget3.x = self.build_checkbox("Live", root = self.widget3, command = app.cmd_live)
 		self.widget3.y = self.build_button("Now", app.cmd_capture, root = self.widget3, grid={"column":1, "row":0, "sticky":"E"})
-		self.widget4 = self.build_button("Save...", app.cmd_save, grid={"columnspan":1})
+		self.widget4 = self.build_button("Save...", app.cmd_save)
 		self.widget5 = self.build_label("Settings", grid={"columnspan":1})
-		self.widget6 = self.build_labelframe("Mode")
-		self.widget6.x = self.build_checkbox("Default", root = self.widget6)
-		self.widget6.y = self.build_entry(root = self.widget6, grid={"column":1, "row":0})
+		self.widget6 = self.build_labelframe2("Mode")
 		self.widget7 = self.build_labelframe2("Exposure")
 		self.widget8 = self.build_labelframe2("ISO")
 		self.widget9 = self.build_labelframe2("Delay")
@@ -199,14 +201,26 @@ class MyCamCanvas(tk.Canvas):
 		self.canimage = self.create_image((0, 0), anchor=tk.NW)
 		self.cantime = self.create_text((20, 20), anchor=tk.NW, fill="white")
 
+		self.pil_image = None
+		self.timestamp = "now"
+
 	def set_image(self, pil_image):
+		self.pil_image = pil_image
 		self.image = ImageTk.PhotoImage(pil_image)
 		self.itemconfig(self.canimage, image=self.image)
 
 	def set_time(self, timestamp):
-		self.itemconfig(self.cantime, text=timestamp)
+		self.timestamp = timestamp
+		self.itemconfig(self.cantime, text=self.timestamp)
 
-		
+	def save(self):
+		if self.pil_image is not None:
+			filename = "{}.png".format(self.timestamp)
+			self.pil_image.save(filename)
+			print("Save '{}'".format(filename))
+		else:
+			print("No image")
+
 class MainApplication(tk.Frame):
 	def __init__(self, master, mycam):
 		tk.Frame.__init__(self, master)
@@ -217,7 +231,6 @@ class MainApplication(tk.Frame):
 		self.canvas = MyCamCanvas(self, width=960, height=540)
 		self.canvas.grid(column=10, row=0)
 
-		self.pilimage = None
 		self.updater = LiveUpdater(self.mycam, self.canvas)
 		self.updater.start()
 
@@ -238,12 +251,7 @@ class MainApplication(tk.Frame):
 			self.updater.live(False)
 
 	def cmd_save(self):
-		if self.pilimage is not None:
-			filename = "{}.png".format(self.timestamp)
-			self.pilimage.save(filename)
-			print("Save '{}'".format(filename))
-		else:
-			print("No image")
+		self.canvas.save()
 
 	def cmd_exit(self):
 		print("Exit")
