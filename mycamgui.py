@@ -105,28 +105,51 @@ class LiveUpdater:
 
 			return item
 
+	class AutosaveWorker(Worker):
+		def __init__(self, mycanvas, in_q, out_q = None):
+			LiveUpdater.Worker.__init__(self, in_q, out_q)
+			self.mycanvas = mycanvas
+			self.state = False
+
+		def set_state(self, state):
+			print("Set autosave: {}".format(state))
+			self.state = state
+
+		def work(self, item):
+			if (self.state is True):
+				print("Saving...")
+				item.filename = "{}.png".format(item.timestamp)
+				item.image.save(item.filename)
+				print("Save '{}'".format(item.filename))
+			return item
+
 	def __init__(self, mycam, mycanvas):
 		self.aq = queue.Queue(1)
 		self.bq = queue.Queue(1)
+		self.cq = queue.Queue(1)
 
 		self.aw = self.CaptureWorker(mycam, self.aq)
 		self.bw = self.ScaleWorker(self.aq, self.bq)
-		self.cw = self.DisplayWorker(mycanvas, self.bq)
+		self.cw = self.DisplayWorker(mycanvas, self.bq, self.cq)
+		self.dw = self.AutosaveWorker(mycanvas, self.cq)
 
 	def start(self):
 		self.aw.start()
 		self.bw.start()
 		self.cw.start()
+		self.dw.start()
 
 	def join(self):
 		self.aw.set_state(LiveUpdate.EXIT)
 
 		self.aq.join()
 		self.bq.join()
+		self.cq.join()
 
 		self.aw.join()
 		self.bw.join()
 		self.cw.join()
+		self.dw.join()
 
 	def once(self):
 		self.aw.set_state(LiveUpdate.ONCE)
@@ -137,6 +160,9 @@ class LiveUpdater:
 		else:
 			self.aw.set_state(LiveUpdate.PAUSE)
 
+	def autosave(self, status):
+		self.dw.set_state(status)
+
 class MyCamMenu(tk.Frame):
 	def __init__(self, master, app):
 		tk.Frame.__init__(self, master)
@@ -146,7 +172,9 @@ class MyCamMenu(tk.Frame):
 		self.widget3 = self.build_labelframe("Capture", grid={"sticky":"EW"})
 		self.widget3.x = self.build_checkbox("Live", root = self.widget3, command = app.cmd_live)
 		self.widget3.y = self.build_button("Now", app.cmd_capture, root = self.widget3, grid={"column":1, "row":0, "sticky":"E"})
-		self.widget4 = self.build_button("Save...", app.cmd_save)
+		self.widget4 = self.build_labelframe("Save", grid={"sticky":"EW"})
+		self.widget4.x = self.build_checkbox("Auto", root = self.widget4, command = app.cmd_autosave)
+		self.widget4.y = self.build_button("Now", app.cmd_save, root = self.widget4, grid={"column":1, "row":0, "sticky":"E"})
 		self.widget5 = self.build_label("Settings", grid={"columnspan":1})
 		self.widget6 = self.build_labelframe2("Mode")
 		self.widget7 = self.build_labelframe2("Exposure")
@@ -252,6 +280,13 @@ class MainApplication(tk.Frame):
 
 	def cmd_save(self):
 		self.canvas.save()
+
+	def cmd_autosave(self):
+		auto = self.menu.widget4.x.var.get()
+		if (auto > 0):
+			self.updater.autosave(True)
+		else:
+			self.updater.autosave(False)
 
 	def cmd_exit(self):
 		print("Exit")
