@@ -239,20 +239,59 @@ class MyCamCanvas(tk.Canvas):
 	def __init__(self, master, *args, **kwargs):
 		tk.Canvas.__init__(self, master, *args, **kwargs)
 
-		self.canimage = self.create_image((0, 0), anchor=tk.NW)
-		self.cantime = self.create_text((20, 20), anchor=tk.NW, fill="white")
+		self.can_image = self.create_image((0, 0), anchor=tk.NW)
+		self.can_time = self.create_text((20, 20), anchor=tk.NW, fill="white")
+		self.bind("<Button-1>", self.on_click)
+		self.bind("<MouseWheel>", self.on_wheel)
+		self.bind("<Button-4>", self.on_wheel)
+		self.bind("<Button-5>", self.on_wheel)
+
+		self.can_zoom = self.create_image((0, 0))
+		self.zoom_pos = (0, 0)
+		self.zoom_level = 0
 
 		self.pil_image = None
 		self.timestamp = "now"
 
+	def set_zoom(self):
+		if self.pil_image is not None:
+			coords = self.coords(self.can_zoom)
+			self.move(self.can_zoom, self.zoom_pos[0]-coords[0], self.zoom_pos[1]-coords[1])
+			size = (200, 200)
+			zoom = (200/pow(2, self.zoom_level/2), 200/pow(2, self.zoom_level/2))
+			img = self.pil_image.crop((self.zoom_pos[0]-zoom[0]/2, self.zoom_pos[1]-zoom[1]/2, self.zoom_pos[0]+zoom[0]/2, self.zoom_pos[1]+zoom[1]/2))
+			img = img.resize(size)
+			self.zoom = ImageTk.PhotoImage(img)
+			self.itemconfig(self.can_zoom, image=self.zoom)
+
+	def on_click(self, event):
+		print("Click: {} {}".format(event.x, event.y))
+
+		self.zoom_pos = (event.x, event.y)
+		self.set_zoom()
+
+	def on_wheel(self, event):
+		def delta(event):
+			if (event.num == 5 or event.delta < 0):
+				return -1
+			if (event.num == 4 or event.delta > 0):
+				return 1
+			return 0
+
+		self.zoom_level += delta(event)
+		print("Zoom: {}".format(self.zoom_level))
+		self.set_zoom()
+
 	def set_image(self, pil_image):
 		self.pil_image = pil_image
 		self.image = ImageTk.PhotoImage(pil_image)
-		self.itemconfig(self.canimage, image=self.image)
+		self.itemconfig(self.can_image, image=self.image)
+
+		self.set_zoom()
 
 	def set_time(self, timestamp):
 		self.timestamp = timestamp
-		self.itemconfig(self.cantime, text=self.timestamp)
+		self.itemconfig(self.can_time, text=self.timestamp)
 
 	def save(self):
 		if self.pil_image is not None:
