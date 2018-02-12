@@ -255,11 +255,20 @@ class MyCamCanvas(tk.Canvas):
 
 	def set_zoom(self):
 		if self.pil_image is not None:
+			def pw2pp(pos, size):
+				return (pos[0]-size[0]/2, pos[1]-size[1]/2, pos[0]+size[0]/2, pos[1]+size[1]/2)
+
+			def pp2pw(x1, y1, x2, y2):
+				center = ((x1 + x2)/2, (y1 + y2)/2)
+				size = (x2 - x1, y2 - y1)
+				return (center, size)
+
 			coords = self.coords(self.can_zoom)
 			self.move(self.can_zoom, self.zoom_pos[0]-coords[0], self.zoom_pos[1]-coords[1])
 			size = (200, 200)
-			zoom = (200/pow(2, self.zoom_level/2), 200/pow(2, self.zoom_level/2))
-			img = self.pil_image.crop((self.zoom_pos[0]-zoom[0]/2, self.zoom_pos[1]-zoom[1]/2, self.zoom_pos[0]+zoom[0]/2, self.zoom_pos[1]+zoom[1]/2))
+			zoom_factor = pow(2, self.zoom_level/2)
+			zoom = (size[0]/zoom_factor, size[1]/zoom_factor)
+			img = self.pil_image.crop(pw2pp(self.zoom_pos, zoom))
 			img = img.resize(size)
 			self.zoom = ImageTk.PhotoImage(img)
 			self.itemconfig(self.can_zoom, image=self.zoom)
@@ -278,7 +287,7 @@ class MyCamCanvas(tk.Canvas):
 				return 1
 			return 0
 
-		self.zoom_level += delta(event)
+		self.zoom_level = sorted([0, self.zoom_level + delta(event), 8])[1]
 		print("Zoom: {}".format(self.zoom_level))
 		self.set_zoom()
 
