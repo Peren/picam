@@ -9,14 +9,18 @@ import datetime
 import os
 
 class Config:
-	mode = 'auto'
+	resolution = (1920, 1080)
+	sensor_mode = 3
 	exposure = 0
 	iso = 0
+	exposure_mode = 'auto'
 
-	def __init__(self, mode = 'auto', exposure = 0, iso = 0):
-		self.mode = mode
+	def __init__(self, resolution = (1920, 1080), sensor_mode = 3, exposure = 0, iso = 0, exposure_mode = 'auto'):
+		self.resolution = resolution
+		self.sensor_mode = sensor_mode
 		self.exposure = exposure
 		self.iso = iso
+		self.exposure_mode = exposure_mode
 
 class MyCamera:
 	camera = PiCamera()
@@ -26,6 +30,23 @@ class MyCamera:
 
 	def config(self, config):
 		self.configure(config.mode, config.exposure, config.iso)
+
+	def set_config(self, config):
+		if (config.resolution is not None):
+			self.camera.resolution = config.resolution
+		if (config.sensor_mode is not None):
+			self.camera.sensor_mode = config.sensor_mode
+		if (config.exposure is not None):
+			framerate = 30
+			if (config.exposure > 0):
+				framerate = Fraction(1000, config.exposure)
+			self.camera.framerate = framerate
+			shutter_speed = config.exposure * 1000
+			self.camera.shutter_speed = shutter_speed
+		if (config.iso is not None):
+			self.camera.iso = config.iso
+		if (config.exposure_mode is not None):
+			self.camera.exposure_mode = config.exposure_mode
 
 	def configure(self, mode, exposure, iso):
 		shutter_speed = exposure * 1000
