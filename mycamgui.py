@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
-from mycamera import MyCamera
+from mycamera import MyCamera, Config
 import datetime
 import threading
 import time
@@ -85,7 +85,10 @@ class LiveUpdater:
 
 		@timing
 		def work(self, item):
-			item.image = self.mycam.capture_image()
+			try:
+				item.image = self.mycam.capture_image()
+			except:
+				item.image = None
 			return item
 
 	class ScaleWorker(Worker):
@@ -94,8 +97,9 @@ class LiveUpdater:
 
 		@timing
 		def work(self, item):
-			size = (960, 540)
-			item.image = item.image.resize(size, Image.ANTIALIAS)
+			if (item.image is not None):
+				size = (960, 540)
+				item.image.thumbnail(size)
 			return item
 
 	class DisplayWorker(Worker):
@@ -110,10 +114,11 @@ class LiveUpdater:
 
 		@timing
 		def work(self, item):
-			self.mycanvas.set_image(item.image)
+			if (item.image is not None):
+				self.mycanvas.set_image(item.image)
 
-			item.timestamp = self.get_timestamp()
-			self.mycanvas.set_time(item.timestamp)
+				item.timestamp = self.get_timestamp()
+				self.mycanvas.set_time(item.timestamp)
 
 			return item
 
@@ -129,7 +134,8 @@ class LiveUpdater:
 
 		@timing
 		def work(self, item):
-			if (self.state is True):
+			if (self.state is True and
+				item.image is not None):
 				print("Saving...")
 				item.filename = "{}.png".format(item.timestamp)
 				item.image.save(item.filename)
@@ -180,8 +186,10 @@ class MyCamMenu(tk.Frame):
 	def __init__(self, master, app):
 		tk.Frame.__init__(self, master)
 
-		self.widget1 = self.build_label("Controls", grid={"columnspan":1})
-		self.widget2 = self.build_button("Calibrate", app.cmd_calibrate, grid={"columnspan":2})
+		self.widget0 = self.build_label("Controls", grid={"columnspan":1})
+		self.widget1 = self.build_labelframe("Resolution", grid={"sticky":"EW"})
+		self.widget1.x = self.build_combo(["2592x1944", "1920x1080", "1296x972", "800x600", "640x480"], app.cmd_resolution)
+		self.widget2 = self.build_button("Calibrate", app.cmd_calibrate, grid={"columnspan":1})
 		self.widget3 = self.build_labelframe("Capture", grid={"sticky":"EW"})
 		self.widget3.x = self.build_checkbox("Live", root = self.widget3, command = app.cmd_live)
 		self.widget3.y = self.build_button("Now", app.cmd_capture, root = self.widget3, grid={"column":1, "row":0, "sticky":"E"})
@@ -221,6 +229,17 @@ class MyCamMenu(tk.Frame):
 		button = ttk.Button(root, text=text, command=command)
 		return self.do_grid(button, grid)
 
+	def build_combo(self, values, command = None, root = None, var = None, grid = {}):
+		if (root is None): root = self
+		if (var is None): var = tk.StringVar()
+		combo = ttk.Combobox(root, textvariable=var)
+		combo['values'] = values
+		combo.current(0)
+		if (command is not None):
+			combo.bind("<<ComboboxSelected>>", lambda event: command(combo.get()))
+		combo.var = var
+		return self.do_grid(combo, grid)
+
 	def build_entry(self, root = None, grid = {}):
 		if (root is None): root = self
 		entry = ttk.Entry(root)
@@ -239,28 +258,30 @@ class MyCamCanvas(tk.Canvas):
 	def __init__(self, master, *args, **kwargs):
 		tk.Canvas.__init__(self, master, *args, **kwargs)
 
-		self.can_image = self.create_image((0, 0), anchor=tk.NW)
-		self.can_time = self.create_text((20, 20), anchor=tk.NW, fill="white")
 		self.bind("<Button-1>", self.on_click)
 		self.bind("<MouseWheel>", self.on_wheel)
 		self.bind("<Button-4>", self.on_wheel)
 		self.bind("<Button-5>", self.on_wheel)
 
+		self.can_image = self.create_image((0, 0), anchor=tk.NW)
+		self.pil_image = None
+
 		self.can_zoom = self.create_image((0, 0))
 		self.zoom_pos = (0, 0)
 		self.zoom_level = 0
 
-		self.pil_image = None
+		self.can_time = self.create_text((20, 20), anchor=tk.NW, fill="white")
 		self.timestamp = "now"
 
 	def set_zoom(self):
 		if self.pil_image is not None:
 			def pw2pp(pos, size):
-				return (pos[0]-size[0]/2, pos[1]-size[1]/2, pos[0]+size[0]/2, pos[1]+size[1]/2)
+				return (pos[0]-size[0]/2, pos[1]-size[1]/2,
+						pos[0]+size[0]/2, pos[1]+size[1]/2)
 
 			def pp2pw(x1, y1, x2, y2):
-				center = ((x1 + x2)/2, (y1 + y2)/2)
-				size = (x2 - x1, y2 - y1)
+				center = ((x1+x2)/2, (y1+y2)/2)
+				size = (x2-x1, y2-y1)
 				return (center, size)
 
 			coords = self.coords(self.can_zoom)
@@ -274,8 +295,6 @@ class MyCamCanvas(tk.Canvas):
 			self.itemconfig(self.can_zoom, image=self.zoom)
 
 	def on_click(self, event):
-		print("Click: {} {}".format(event.x, event.y))
-
 		self.zoom_pos = (event.x, event.y)
 		self.set_zoom()
 
@@ -288,7 +307,6 @@ class MyCamCanvas(tk.Canvas):
 			return 0
 
 		self.zoom_level = sorted([0, self.zoom_level + delta(event), 8])[1]
-		print("Zoom: {}".format(self.zoom_level))
 		self.set_zoom()
 
 	def set_image(self, pil_image):
@@ -318,10 +336,27 @@ class MainApplication(tk.Frame):
 		self.menu = MyCamMenu(self, self)
 		self.menu.grid()
 		self.canvas = MyCamCanvas(self, width=960, height=540)
-		self.canvas.grid(column=10, row=0)
+		self.canvas.grid(column=1, row=0, sticky=tk.N+tk.S+tk.E+tk.W)
+
+		tk.Grid.columnconfigure(self, 1, weight=1)
+		tk.Grid.rowconfigure(self, 0, weight=1)
 
 		self.updater = LiveUpdater(self.mycam, self.canvas)
 		self.updater.start()
+
+	def cmd_resolution(self, size):
+		config = Config()
+		if (size == "640x480"):
+			config.resolution=(640, 480)
+		if (size == "800x600"):
+			config.resolution=(800, 600)
+		if (size == "1280x720"):
+			config.resolution=(1280, 720)
+		if (size == "1920x1080"):
+			config.resolution=(1920, 1080)
+		if (size == "2592x1944"):
+			config.resolution=(2592, 1944)
+		self.mycam.set_config(config)
 
 	def cmd_calibrate(self):
 		self.mycam.calibrate()

@@ -9,24 +9,26 @@ import datetime
 import os
 
 class Config:
-	resolution = (1920, 1080)
-	sensor_mode = 3
-	exposure = 0
-	iso = 0
-	exposure_mode = 'auto'
-
-	def __init__(self, resolution = (1920, 1080), sensor_mode = 3, exposure = 0, iso = 0, exposure_mode = 'auto'):
+	def __init__(self, resolution = None, sensor_mode = None, exposure = None, iso = None, exposure_mode = None):
 		self.resolution = resolution
 		self.sensor_mode = sensor_mode
 		self.exposure = exposure
 		self.iso = iso
 		self.exposure_mode = exposure_mode
 
+class DefaultConfig(Config):
+	def __init__(self):
+		Config.__init__(self, (1920, 1080), 3, 0, 0, 'auto')
+
 class MyCamera:
 	camera = PiCamera()
 
 	def __init__(self, mode='auto', exposure=0, iso=0):
-		self.configure(mode, exposure, iso)
+		config = DefaultConfig()
+		config.exposure_mode = mode
+		config.exposure = exposure
+		config.iso = iso
+		self.set_config(config)
 
 	def config(self, config):
 		self.configure(config.mode, config.exposure, config.iso)
