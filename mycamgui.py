@@ -186,38 +186,37 @@ class MyCamMenu(tk.Frame):
 	def __init__(self, master, app):
 		tk.Frame.__init__(self, master)
 
-		self.widget0 = self.build_label("Controls", grid={"columnspan":1})
-		self.widget1 = self.build_labelframe("Resolution", grid={"sticky":"EW"})
-		self.widget1.x = self.build_combo(["2592x1944", "1920x1080", "1296x972", "800x600", "640x480"], app.cmd_resolution)
-		self.widget2 = self.build_button("Calibrate", app.cmd_calibrate, grid={"columnspan":1})
-		self.widget3 = self.build_labelframe("Capture", grid={"sticky":"EW"})
+		self.widget0 = self.build_label("Controls", grid = {"columnspan":1})
+		self.widget1 = self.build_labelframe("Resolution", grid = {"sticky":"EW"})
+		self.widget1.x = self.build_combo(["2592x1944", "1920x1440", "1920x1080", "1296x972", "800x600", "640x480"], root = self.widget1, command = app.cmd_resolution)
+		self.widget2 = self.build_button("Calibrate", app.cmd_calibrate, grid = {"columnspan":1})
+		self.widget3 = self.build_labelframe("Capture", grid = {"sticky":"EW"})
 		self.widget3.x = self.build_checkbox("Live", root = self.widget3, command = app.cmd_live)
-		self.widget3.y = self.build_button("Now", app.cmd_capture, root = self.widget3, grid={"column":1, "row":0, "sticky":"E"})
-		self.widget4 = self.build_labelframe("Save", grid={"sticky":"EW"})
+		self.widget3.y = self.build_button("Now", app.cmd_capture, root = self.widget3, grid = {"column":1, "row":0, "sticky":"E"})
+		self.widget4 = self.build_labelframe("Save", grid = {"sticky":"EW"})
 		self.widget4.x = self.build_checkbox("Auto", root = self.widget4, command = app.cmd_autosave)
-		self.widget4.y = self.build_button("Now", app.cmd_save, root = self.widget4, grid={"column":1, "row":0, "sticky":"E"})
-		self.widget5 = self.build_label("Settings", grid={"columnspan":1})
-		self.widget6 = self.build_labelframe2("Mode")
-		self.widget7 = self.build_labelframe2("Exposure")
-		self.widget8 = self.build_labelframe2("ISO")
-		self.widget9 = self.build_labelframe2("Delay")
-		self.widget10 = self.build_button("Exit", app.cmd_exit, grid={"columnspan":2})
+		self.widget4.y = self.build_button("Now", app.cmd_save, root = self.widget4, grid = {"column":1, "row":0, "sticky":"E"})
+		self.widget5 = self.build_label("Settings", grid = {"columnspan":1})
+		self.widget6 = self.build_labelframeX("Mode")
+		self.widget7 = self.build_labelframeX("Exposure")
+		self.widget8 = self.build_labelframeX("ISO")
+		self.widget9 = self.build_labelframeX("Delay")
+		self.widget10 = self.build_button("Exit", app.cmd_exit, grid = {"columnspan":2})
 
 	def do_grid(self, widget, grid):
 		widget.grid(**grid)
 		return widget
 
-	def build_labelframe2(self, text, root = None, grid = {}):
-		if (root is None): root = self
-		frame = ttk.LabelFrame(root, text=text)
-		frame.checkbox = self.build_checkbox("Default", root = frame)
-		frame.entry = self.build_entry(root = frame, grid={"column":1, "row":0})
-		return self.do_grid(frame, grid)
-
 	def build_labelframe(self, text, root = None, grid = {}):
 		if (root is None): root = self
 		frame = ttk.LabelFrame(root, text=text)
 		return self.do_grid(frame, grid)
+
+	def build_labelframeX(self, text, root = None, grid = {}):
+		frame = self.build_labelframe(text, root, grid)
+		frame.x = self.build_checkbox("Default", root = frame, command = x)
+		frame.y = self.build_entry(root = frame, grid = {"column":1, "row":0})
+		return frame
 
 	def build_label(self, text, root = None, grid = {}):
 		if (root is None): root = self
@@ -354,6 +353,8 @@ class MainApplication(tk.Frame):
 			config.resolution=(1280, 720)
 		if (size == "1920x1080"):
 			config.resolution=(1920, 1080)
+		if (size == "1920x1440"):
+			config.resolution=(1920, 1440)
 		if (size == "2592x1944"):
 			config.resolution=(2592, 1944)
 		self.mycam.set_config(config)
