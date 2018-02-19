@@ -197,10 +197,10 @@ class MyCamMenu(tk.Frame):
 		self.widget4.x = self.build_checkbox("Auto", root = self.widget4, command = app.cmd_autosave)
 		self.widget4.y = self.build_button("Now", app.cmd_save, root = self.widget4, grid = {"column":1, "row":0, "sticky":"E"})
 		self.widget5 = self.build_label("Settings", grid = {"columnspan":1})
-		self.widget6 = self.build_labelframeX("Mode")
-		self.widget7 = self.build_labelframeX("Exposure")
-		self.widget8 = self.build_labelframeX("ISO")
-		self.widget9 = self.build_labelframeX("Delay")
+		self.widget6 = self.build_labelframeX("Mode", app.cmd_test)
+		self.widget7 = self.build_labelframeX("Exposure", app.cmd_test)
+		self.widget8 = self.build_labelframeX("ISO", app.cmd_auto_iso)
+		self.widget9 = self.build_labelframeX("Delay", app.cmd_auto_delay)
 		self.widget10 = self.build_button("Exit", app.cmd_exit, grid = {"columnspan":2})
 
 	def do_grid(self, widget, grid):
@@ -212,9 +212,9 @@ class MyCamMenu(tk.Frame):
 		frame = ttk.LabelFrame(root, text=text)
 		return self.do_grid(frame, grid)
 
-	def build_labelframeX(self, text, root = None, grid = {}):
+	def build_labelframeX(self, text, command, root = None, grid = {}):
 		frame = self.build_labelframe(text, root, grid)
-		frame.x = self.build_checkbox("Default", root = frame, command = x)
+		frame.x = self.build_checkbox("Default", root = frame, command = command)
 		frame.y = self.build_entry(root = frame, grid = {"column":1, "row":0})
 		return frame
 
@@ -225,7 +225,7 @@ class MyCamMenu(tk.Frame):
 
 	def build_button(self, text, command, root = None, grid = {}):
 		if (root is None): root = self
-		button = ttk.Button(root, text=text, command=command)
+		button = ttk.Button(root, text=text, command = command)
 		return self.do_grid(button, grid)
 
 	def build_combo(self, values, command = None, root = None, var = None, grid = {}):
@@ -343,6 +343,9 @@ class MainApplication(tk.Frame):
 		self.updater = LiveUpdater(self.mycam, self.canvas)
 		self.updater.start()
 
+	def cmd_test(self):
+		print("Test")
+
 	def cmd_resolution(self, size):
 		config = Config()
 		if (size == "640x480"):
@@ -384,6 +387,12 @@ class MainApplication(tk.Frame):
 			self.updater.autosave(True)
 		else:
 			self.updater.autosave(False)
+
+	def cmd_auto_iso(self):
+		print("Auto iso")
+
+	def cmd_auto_delay(self):
+		print("Auto delay")
 
 	def cmd_exit(self):
 		print("Exit")
