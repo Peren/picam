@@ -99,7 +99,8 @@ class LiveUpdater:
 		def work(self, item):
 			if (item.image is not None):
 				size = (960, 540)
-				item.image.thumbnail(size)
+				item.thumbnail = item.image.copy()
+				item.thumbnail.thumbnail(size)
 			return item
 
 	class DisplayWorker(Worker):
@@ -115,7 +116,7 @@ class LiveUpdater:
 		@timing
 		def work(self, item):
 			if (item.image is not None):
-				self.mycanvas.set_image(item.image)
+				self.mycanvas.set_image(item.thumbnail)
 
 				item.timestamp = self.get_timestamp()
 				self.mycanvas.set_time(item.timestamp)
@@ -197,10 +198,17 @@ class MyCamMenu(tk.Frame):
 		self.widget4.x = self.build_checkbox("Auto", root = self.widget4, command = app.cmd_autosave)
 		self.widget4.y = self.build_button("Now", app.cmd_save, root = self.widget4, grid = {"column":1, "row":0, "sticky":"E"})
 		self.widget5 = self.build_label("Settings", grid = {"columnspan":1})
-		self.widget6 = self.build_labelframeX("Mode", app.cmd_test)
-		self.widget7 = self.build_labelframeX("Exposure", app.cmd_test)
-		self.widget8 = self.build_labelframeX("ISO", app.cmd_auto_iso)
-		self.widget9 = self.build_labelframeX("Delay", app.cmd_auto_delay)
+#		self.widget6 = self.build_labelframe("Mode")
+#		self.widget6.x = self.build_checkbox("Default", root = self.widget6, command = app.cmd_mode_default)
+#		self.widget6.y = self.build_scale(root = self.widget6, command = app.cmd_mode_value, grid = {"column":1, "row":0, "sticky":"E"})
+		self.widget6 = self.build_labelframeY("Mode", app.cmd_mode_default, app.cmd_mode_value)
+		self.widget7 = self.build_labelframeY("Exposure", app.cmd_exp_default, app.cmd_exp_value)
+		self.widget8 = self.build_labelframe("ISO")
+		self.widget8.x = self.build_checkbox("Default", root = self.widget8, command = app.cmd_iso_default)
+		self.widget8.y = self.build_scale(root = self.widget8, command = app.cmd_iso_value, min = 100, max = 1600, steps = 100, grid = {"column":1, "row":0, "sticky":"E"})
+#		self.widget8.y = self.build_combo(["100", "200", "320", "400", "500", "640", "800"], root = self.widget8, command = app.cmd_iso_value, grid = {"column":1, "row":0, "sticky":"E"})
+#		self.widget8 = self.build_labelframeY("ISO", app.cmd_iso_default, app.cmd_iso_value)
+		self.widget9 = self.build_labelframeY("Delay", app.cmd_delay_default, app.cmd_delay_value)
 		self.widget10 = self.build_button("Exit", app.cmd_exit, grid = {"columnspan":2})
 
 	def do_grid(self, widget, grid):
@@ -216,6 +224,12 @@ class MyCamMenu(tk.Frame):
 		frame = self.build_labelframe(text, root, grid)
 		frame.x = self.build_checkbox("Default", root = frame, command = command)
 		frame.y = self.build_entry(root = frame, grid = {"column":1, "row":0})
+		return frame
+
+	def build_labelframeY(self, text, cmd_check, cmd_value, root = None, grid = {}):
+		frame = self.build_labelframe(text, root, grid)
+		frame.x = self.build_checkbox("Default", root = frame, command = cmd_check)
+		frame.y = self.build_scale(root = frame, command = cmd_value, grid = {"column":1, "row":0})
 		return frame
 
 	def build_label(self, text, root = None, grid = {}):
@@ -252,6 +266,13 @@ class MyCamMenu(tk.Frame):
 			checkbox.config(command=command)
 		checkbox.var = var
 		return self.do_grid(checkbox, grid)
+
+	def build_scale(self, root = None, command = None, min = 0, max = 100, steps = 1, grid = {}):
+		if (root is None): root = self
+		scale = tk.Scale(root, orient=tk.HORIZONTAL, from_ = min, to = max, resolution = steps)
+		if (command is not None):
+			scale.config(command = command)
+		return self.do_grid(scale, grid)
 
 class MyCamCanvas(tk.Canvas):
 	def __init__(self, master, *args, **kwargs):
@@ -388,11 +409,39 @@ class MainApplication(tk.Frame):
 		else:
 			self.updater.autosave(False)
 
-	def cmd_auto_iso(self):
-		print("Auto iso")
+	def cmd_mode_default(self):
+		mode = self.menu.widget6.x.var.get()
+		print("X {}".format(mode))
 
-	def cmd_auto_delay(self):
-		print("Auto delay")
+	def cmd_mode_value(self, value):
+		print(value)
+
+	def cmd_exp_default(self):
+		exp = self.menu.widget7.x.var.get()
+		print("Exp {}".format(exp))
+
+	def cmd_exp_value(self, value):
+		print("Exp val: {}".format(value))
+
+	def cmd_iso_default(self):
+		iso = self.menu.widget8.x.var.get()
+		print("ISO {}".format(iso))
+		if (iso != 0):
+			config = Config(iso = 0)
+			self.mycam.set_config(config)
+
+	def cmd_iso_value(self, value):
+		self.menu.widget8.x.deselect()
+
+		config = Config(iso = int(value))
+		self.mycam.set_config(config)
+		print("ISO {}".format(value))
+
+	def cmd_delay_default(self):
+		print("Delay default")
+
+	def cmd_delay_value(self, value):
+		print("Delay value: {}".format(value))
 
 	def cmd_exit(self):
 		print("Exit")
