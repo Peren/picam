@@ -91,6 +91,22 @@ class LiveUpdater:
 				item.image = None
 			return item
 
+	class WaitingCaptureWorker(CaptureWorker):
+		def __init__(self, mycam, out_q, delay):
+			LiveUpdater.CaptureWorker.__init__(self, mycam, out_q)
+			self.delay = delay
+			self.time_now = time.time()
+
+		def get(self):
+			last_time = self.time_now
+			self.time_now = time.time()
+			time_wait = last_time + self.delay - self.time_now
+			if time_wait > 0:
+				print("Waiting {}s".format(time_wait))
+				with self.cv:
+					self.cv.wait(timeout=time_wait)
+			return LiveUpdater.CaptureWorker.get(self)
+
 	class ScaleWorker(Worker):
 		def __init__(self, in_q, out_q):
 			LiveUpdater.Worker.__init__(self, in_q, out_q)
@@ -148,7 +164,7 @@ class LiveUpdater:
 		self.bq = queue.Queue(1)
 		self.cq = queue.Queue(1)
 
-		self.aw = self.CaptureWorker(mycam, self.aq)
+		self.aw = self.WaitingCaptureWorker(mycam, self.aq, 60)
 		self.bw = self.ScaleWorker(self.aq, self.bq)
 		self.cw = self.DisplayWorker(mycanvas, self.bq, self.cq)
 		self.dw = self.AutosaveWorker(mycanvas, self.cq)
