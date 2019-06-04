@@ -7,13 +7,15 @@ import threading
 import time
 import queue
 import enum
+import sys
 
 def timing(f):
 	def wrap(*args):
+		print("{:<32} +".format(f.__qualname__))
 		t1 = time.time()
 		ret = f(*args)
 		t2 = time.time()
-		print("{:<32} : {:>6.0f}".format(f.__qualname__, (t2 - t1)*1000))
+		print("{:<32} - {:>6.0f}".format(f.__qualname__, (t2 - t1)*1000))
 		return ret
 	return wrap
 
@@ -64,10 +66,17 @@ class LiveUpdater:
 			self.mycam = mycam
 			self.num = 0
 			self.cv = threading.Condition()
+			self.config = None
 			self.state = LiveUpdate.PAUSE
 
+		def set_config(self, config):
+			print("Set config: {}".format(config))
+			with self.cv:
+				self.config = config
+				self.cv.notify()
+
 		def set_state(self, state):
-			print("Set capture: {}".format(state))
+			print("Set state: {}".format(state))
 			with self.cv:
 				self.state = state
 				self.cv.notify()
@@ -81,14 +90,30 @@ class LiveUpdater:
 				if (self.state is LiveUpdate.ONCE):
 					self.set_state(LiveUpdate.PAUSE)
 
-			return LiveUpdater.WorkItem()
+			item = LiveUpdater.WorkItem()
+			item.config = self.config
+			self.config = None
+#			if (self.config is not None):
+#				item.config = self.config
+#				self.config = None
+#			else:
+#				item.config = None
+
+			return item
 
 		@timing
 		def work(self, item):
+			if (item.config is not None):
+				self.mycam.set_config(item.config)
+
+#			print("Capture A")
 			try:
+#				self.mycam.capture("temp.jpg")
 				item.image = self.mycam.capture_image()
 			except:
+#				print("Capture X:", sys.exc_info()[0])
 				item.image = None
+#			print("Capture B")
 			return item
 
 	class WaitingCaptureWorker(CaptureWorker):
@@ -187,6 +212,9 @@ class LiveUpdater:
 		self.cw.join()
 		self.dw.join()
 
+	def set_config(self, config):
+		self.aw.set_config(config)
+
 	def once(self):
 		self.aw.set_state(LiveUpdate.ONCE)
 
@@ -205,7 +233,7 @@ class MyCamMenu(tk.Frame):
 
 		self.widget0 = self.build_label("Controls", grid = {"columnspan":1})
 		self.widget1 = self.build_labelframe("Resolution", grid = {"sticky":"EW"})
-		self.widget1.x = self.build_combo(["2592x1944", "1920x1440", "1920x1080", "1296x972", "800x600", "640x480"], root = self.widget1, command = app.cmd_resolution)
+		self.widget1.x = self.build_combo(["2592x1944", "1920x1440", "1920x1200", "1920x1080", "1296x972", "800x600", "960x540", "640x480"], root = self.widget1, command = app.cmd_resolution)
 		self.widget2 = self.build_button("Calibrate", app.cmd_calibrate, grid = {"columnspan":1})
 		self.widget3 = self.build_labelframe("Capture", grid = {"sticky":"EW"})
 		self.widget3.x = self.build_checkbox("Live", root = self.widget3, command = app.cmd_live)
@@ -387,17 +415,22 @@ class MainApplication(tk.Frame):
 		config = Config()
 		if (size == "640x480"):
 			config.resolution=(640, 480)
+		if (size == "960x540"):
+			config.resolution=(960, 540)
 		if (size == "800x600"):
 			config.resolution=(800, 600)
 		if (size == "1280x720"):
 			config.resolution=(1280, 720)
 		if (size == "1920x1080"):
 			config.resolution=(1920, 1080)
+		if (size == "1920x1200"):
+			config.resolution=(1920, 1200)
 		if (size == "1920x1440"):
 			config.resolution=(1920, 1440)
 		if (size == "2592x1944"):
 			config.resolution=(2592, 1944)
-		self.mycam.set_config(config)
+#		self.mycam.set_config(config)
+		self.updater.set_config(config)
 
 	def cmd_calibrate(self):
 		self.mycam.calibrate()

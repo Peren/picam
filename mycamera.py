@@ -28,7 +28,7 @@ class MyCamera:
 		config.exposure_mode = mode
 		config.exposure = exposure
 		config.iso = iso
-		self.set_config(config)
+#		self.set_config(config)
 
 	def config(self, config):
 		self.configure(config.mode, config.exposure, config.iso)
@@ -101,12 +101,15 @@ class MyCamera:
 		print("Saving {} ({}, {}, {})".format(file, a_gain, d_gain, speed), end='', flush=True)
 		self.camera.annotate_text = "Analog Gain: {}, Digital Gain: {}, Exposure: {}".format(a_gain, d_gain, speed)
 		print('.', end='', flush=True)
+#		self.camera.PiCamera.CAPTURE_TIMEOUT = 300 #5min
 		self.camera.capture(file)
 		print('.', end='', flush=True)
+#		self.camera.close()
 
 	def capture_image(self):
 		stream = io.BytesIO()
 		self.camera.capture(stream, format='png')
+#		self.camera.close()
 		stream.seek(0)
 		return Image.open(stream)
 
@@ -139,12 +142,13 @@ def main():
 	timestamp = now.strftime('%Y-%m-%d_%H-%M-%S')
 
 	path = '/share/pics/{}'.format(timestamp)
-	os.makedirs(path)
 	print("Create folder: {}".format(path))
+	os.makedirs(path)
+	os.chdir(path)
 
 	for i in range(args.number):
 		file = args.file.replace(".", "_{}_{}.".format(args.exposure, i), 1)
-		my_camera.capture(path +"/"+ file)
+		my_camera.capture(file)
 		if args.delay > 0:
 			sleep(args.delay)
 			print('.')
