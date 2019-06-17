@@ -9,12 +9,13 @@ import datetime
 import os
 
 class Config:
-	def __init__(self, resolution = None, sensor_mode = None, exposure = None, iso = None, exposure_mode = None):
+	def __init__(self, resolution = None, sensor_mode = None, exposure = None, iso = None, exposure_mode = None, rotation = None):
 		self.resolution = resolution
 		self.sensor_mode = sensor_mode
 		self.exposure = exposure
 		self.iso = iso
 		self.exposure_mode = exposure_mode
+		self.rotation = rotation
 
 class DefaultConfig(Config):
 	def __init__(self):
@@ -49,6 +50,8 @@ class MyCamera:
 			self.camera.iso = config.iso
 		if (config.exposure_mode is not None):
 			self.camera.exposure_mode = config.exposure_mode
+		if (config.rotation is not None):
+			self.camera.rotation = config.rotation
 
 	def configure(self, mode, exposure, iso):
 		shutter_speed = exposure * 1000

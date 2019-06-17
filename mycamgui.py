@@ -8,10 +8,16 @@ import time
 import queue
 import enum
 import sys
+import numpy as np
+
+def trace(*args):
+	now = datetime.datetime.now()
+	timestamp = now.strftime("%Y%m%d_%H%M%S")
+	print("{} {}".format(timestamp, *args))
 
 def timing(f):
 	def wrap(*args):
-		print("{:<32} +".format(f.__qualname__))
+#		print("{:<32} +".format(f.__qualname__))
 		t1 = time.time()
 		ret = f(*args)
 		t2 = time.time()
@@ -24,6 +30,11 @@ class LiveUpdate(enum.Enum):
 	RUN   = 1
 	ONCE  = 2
 	EXIT  = 3
+
+class Display(enum.Enum):
+	NOW  = 0
+	AVG  = 1
+	DIFF = 2
 
 class LiveUpdater:
 	class WorkItem:
@@ -144,23 +155,75 @@ class LiveUpdater:
 				item.thumbnail.thumbnail(size)
 			return item
 
+	class AverageWorker(Worker):
+		def __init__(self, in_q, out_q = None):
+			LiveUpdater.Worker.__init__(self, in_q, out_q)
+			self.avg = None
+
+		def calc_average(self, item):
+			if (self.avg is None):
+				print("No previous average")
+				self.avg = item.thumbnail
+			self.avg = Image.blend(self.avg, item.thumbnail, 0.3)
+
+		@timing
+		def work(self, item):
+			if (item.thumbnail is not None):
+				self.calc_average(item)
+			item.avg = self.avg
+
+			return item
+
+	class DiffWorker(Worker):
+		def __init__(self, in_q, out_q = None):
+			LiveUpdater.Worker.__init__(self, in_q, out_q)
+
+		def calc_diff(self, item):
+			now = (np.array(item.thumbnail.convert('L'))).astype(np.int)
+			avg = (np.array(item.avg.convert('L'))).astype(np.int)
+			diff = (now - avg)*10
+			mean = diff.mean()
+			print("Mean: {}".format(mean))
+			item.diff = Image.fromarray(np.absolute(diff-mean)+127)
+
+		@timing
+		def work(self, item):
+			if (item.thumbnail is not None) and (item.avg is not None):
+				self.calc_diff(item)
+
+			return item
+
 	class DisplayWorker(Worker):
 		def __init__(self, mycanvas, in_q, out_q = None):
 			LiveUpdater.Worker.__init__(self, in_q, out_q)
 			self.mycanvas = mycanvas
+			self.display = Display.NOW
 
 		def get_timestamp(self):
 			now = datetime.datetime.now()
 			timestamp = now.strftime("%Y%m%d_%H%M%S")
 			return timestamp
 
+		def set_display(self, display):
+			self.display = display
+
 		@timing
 		def work(self, item):
-			if (item.image is not None):
-				self.mycanvas.set_image(item.thumbnail)
+			image = None
+			if (self.display is Display.NOW):
+				image = item.thumbnail
+			if (self.display is Display.AVG):
+				image = item.avg
+			if (self.display is Display.DIFF):
+				image = item.diff
+
+			if (image is not None):
+				self.mycanvas.set_image(image)
 
 				item.timestamp = self.get_timestamp()
 				self.mycanvas.set_time(item.timestamp)
+			else:
+				print("No display")
 
 			return item
 
@@ -188,17 +251,24 @@ class LiveUpdater:
 		self.aq = queue.Queue(1)
 		self.bq = queue.Queue(1)
 		self.cq = queue.Queue(1)
+		self.dq = queue.Queue(1)
+		self.eq = queue.Queue(1)
 
-		self.aw = self.WaitingCaptureWorker(mycam, self.aq, 60)
+#		self.aw = self.WaitingCaptureWorker(mycam, self.aq, 60)
+		self.aw = self.CaptureWorker(mycam, self.aq)
 		self.bw = self.ScaleWorker(self.aq, self.bq)
-		self.cw = self.DisplayWorker(mycanvas, self.bq, self.cq)
-		self.dw = self.AutosaveWorker(mycanvas, self.cq)
+		self.cw = self.AverageWorker(self.bq, self.cq)
+		self.dw = self.DiffWorker(self.cq, self.dq)
+		self.ew = self.DisplayWorker(mycanvas, self.dq, self.eq)
+		self.fw = self.AutosaveWorker(mycanvas, self.eq)
 
 	def start(self):
 		self.aw.start()
 		self.bw.start()
 		self.cw.start()
 		self.dw.start()
+		self.ew.start()
+		self.fw.start()
 
 	def join(self):
 		self.aw.set_state(LiveUpdate.EXIT)
@@ -206,11 +276,18 @@ class LiveUpdater:
 		self.aq.join()
 		self.bq.join()
 		self.cq.join()
+		self.dq.join()
+		self.eq.join()
 
 		self.aw.join()
 		self.bw.join()
 		self.cw.join()
 		self.dw.join()
+		self.ew.join()
+		self.fw.join()
+
+	def set_display(self, display):
+		self.ew.set_display(display)
 
 	def set_config(self, config):
 		self.aw.set_config(config)
@@ -225,15 +302,19 @@ class LiveUpdater:
 			self.aw.set_state(LiveUpdate.PAUSE)
 
 	def autosave(self, status):
-		self.dw.set_state(status)
+		self.fw.set_state(status)
 
 class MyCamMenu(tk.Frame):
 	def __init__(self, master, app):
 		tk.Frame.__init__(self, master)
 
 		self.widget0 = self.build_label("Controls", grid = {"columnspan":1})
+		self.widget1a = self.build_labelframe("Display", grid = {"sticky":"EW"})
+		self.widget1a.x = self.build_combo(["Now", "Avg", "Diff"], root = self.widget1a, command = app.cmd_display)
 		self.widget1 = self.build_labelframe("Resolution", grid = {"sticky":"EW"})
 		self.widget1.x = self.build_combo(["2592x1944", "1920x1440", "1920x1200", "1920x1080", "1296x972", "800x600", "960x540", "640x480"], root = self.widget1, command = app.cmd_resolution)
+#		self.widget1b = self.build_labelframe("Scale", grid = {"sticky":"EW"})
+#		self.widget1b.x = self.build_combo(["2592x1944", "1920x1440", "1920x1200", "1920x1080", "1296x972", "800x600", "960x540", "640x480"], root = self.widget1, command = app.cmd_resolution)
 		self.widget2 = self.build_button("Calibrate", app.cmd_calibrate, grid = {"columnspan":1})
 		self.widget3 = self.build_labelframe("Capture", grid = {"sticky":"EW"})
 		self.widget3.x = self.build_checkbox("Live", root = self.widget3, command = app.cmd_live)
@@ -247,6 +328,8 @@ class MyCamMenu(tk.Frame):
 #		self.widget6.y = self.build_scale(root = self.widget6, command = app.cmd_mode_value, grid = {"column":1, "row":0, "sticky":"E"})
 		self.widget6 = self.build_labelframeY("Mode", app.cmd_mode_default, app.cmd_mode_value)
 		self.widget7 = self.build_labelframeY("Exposure", app.cmd_exp_default, app.cmd_exp_value)
+		self.widgetA = self.build_labelframe("Rotation", grid = {"sticky":"EW"})
+		self.widgetA.x = self.build_combo(["0", "90", "180", "270"], root = self.widgetA, command = app.cmd_rotation)
 		self.widget8 = self.build_labelframe("ISO")
 		self.widget8.x = self.build_checkbox("Default", root = self.widget8, command = app.cmd_iso_default)
 		self.widget8.y = self.build_scale(root = self.widget8, command = app.cmd_iso_value, min = 100, max = 1600, steps = 100, grid = {"column":1, "row":0, "sticky":"E"})
@@ -411,6 +494,17 @@ class MainApplication(tk.Frame):
 	def cmd_test(self):
 		print("Test")
 
+	def cmd_display(self, display):
+		print("Display {}".format(display))
+		if (display == "Now"):
+			self.updater.set_display(Display.NOW)
+		elif (display == "Avg"):
+			self.updater.set_display(Display.AVG)
+		elif (display == "Diff"):
+			self.updater.set_display(Display.DIFF)
+		else:
+			print("Unknown")
+
 	def cmd_resolution(self, size):
 		config = Config()
 		if (size == "640x480"):
@@ -464,6 +558,19 @@ class MainApplication(tk.Frame):
 
 	def cmd_mode_value(self, value):
 		print(value)
+
+	def cmd_rotation(self, rotation):
+		print(rotation)
+		rot = 0
+		if (rotation == "90"):
+			rot = 90
+		if (rotation == "180"):
+			rot = 180
+		if (rotation == "270"):
+			rot = 270
+
+		config = Config(rotation = rot)
+		self.mycam.set_config(config)
 
 	def cmd_exp_default(self):
 		exp = self.menu.widget7.x.var.get()
